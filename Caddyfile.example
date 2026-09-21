@@ -1,0 +1,6 @@
+# Replace amazon.example.com. DNS for that name must point at this machine.
+# amazon-cart listens on 127.0.0.1:8792.
+amazon.example.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:8792
+}

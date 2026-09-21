@@ -83,3 +83,7 @@ Search also accepts `max_results` (default 16) and `region` (default `us`). Regi
 Send the key as `Authorization: Bearer <AMAZON_API_KEY>` or `X-Api-Key`.
 
 If Amazon serves a block page, the API returns HTTP 503.
+
+## Muse
+
+Muse has no settings field for a custom server URL. Register this API as a custom provider with one Bearer key on a public HTTPS hostname. The steps, the exact `request_api_access` arguments, and what to tell Muse are in [MUSE.md](MUSE.md).

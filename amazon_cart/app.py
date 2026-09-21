@@ -21,7 +21,12 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-API_KEY = (os.environ.get("AMAZON_API_KEY") or os.environ.get("API_KEY") or "").strip()
+API_KEY = (
+    os.environ.get("AMAZON_API_KEY")
+    or os.environ.get("MUSE_API_KEY")
+    or os.environ.get("API_KEY")
+    or ""
+).strip()
 DEFAULT_REGION = os.environ.get("AMAZON_DEFAULT_REGION", "us").strip().lower() or "us"
 
 REGIONS: dict[str, str] = {
