@@ -15,7 +15,7 @@ You need Python 3.11+ and `curl`.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install git+https://github.com/aasper03/amazon-cart.git
+pip install git+https://github.com/aasper03/muse-amazon-bypass.git
 mkdir -p ~/.amazon-cart
 chmod 700 ~/.amazon-cart
 openssl rand -hex 32 > ~/.amazon-cart/api-key
