@@ -2,7 +2,7 @@
 
 This is a direct response to Amazon's block of AI agent shopping traffic on 9/20/2026.
 
-A small HTTP API so [Muse](https://muse.ai) can search Amazon and add items to a cart. Run it on the machine Muse can already reach, then point Muse at `http://127.0.0.1:8792`.
+Amazon product search and add-to-cart API for [Muse](https://muse.ai). Run it on the machine Muse can already SSH into, then point Muse at `http://127.0.0.1:8792`.
 
 One connection covers two carts, `personal` and `business`. Each cart is a [Netscape cookie jar](https://curl.se/docs/http-cookies.html) exported from a normal browser. This package does not include anyone's cookies, hostname, or API key.
 

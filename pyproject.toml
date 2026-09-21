@@ -1,7 +1,7 @@
 [project]
 name = "amazon-cart"
 version = "0.1.0"
-description = "Search Amazon products and add them to a personal or business cart."
+description = "Amazon product search and add-to-cart API for Muse."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
