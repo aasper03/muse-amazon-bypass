@@ -1,16 +1,14 @@
 # amazon-cart
 
-A small HTTPS API so [Muse](https://muse.ai) can search Amazon and add items to a cart. Muse has no field for a custom server URL. You run this service on a public hostname, then register it as a custom API provider with one Bearer key.
+A small HTTP API so [Muse](https://muse.ai) can search Amazon and add items to a cart. Run it on the machine Muse can already reach, then point Muse at `http://127.0.0.1:8792`.
 
-One Muse connection covers two carts, `personal` and `business`. Each cart is a [Netscape cookie jar](https://curl.se/docs/http-cookies.html) exported from a normal browser. This package does not include anyone's cookies, hostname, or API key.
+One connection covers two carts, `personal` and `business`. Each cart is a [Netscape cookie jar](https://curl.se/docs/http-cookies.html) exported from a normal browser. This package does not include anyone's cookies, hostname, or API key.
 
 Search does not require a login. Add to cart does. Adding an item does not check out or pay.
 
-Full registration steps and a prompt you can paste to Muse are in [MUSE.md](MUSE.md).
+## Set up
 
-## Set up for Muse
-
-You need Python 3.11+, `curl`, and a public HTTPS name. Muse will not call a Tailscale address, a raw IP, or plain `http://`.
+You need Python 3.11+ and `curl`.
 
 ```bash
 python -m venv .venv
@@ -22,21 +20,6 @@ openssl rand -hex 32 > ~/.amazon-cart/api-key
 chmod 600 ~/.amazon-cart/api-key
 ```
 
-```bash
-export AMAZON_API_KEY="$(cat ~/.amazon-cart/api-key)"
-export HOST=127.0.0.1
-export PORT=8792
-amazon-cart
-```
-
-`MUSE_API_KEY` is accepted as an alias of `AMAZON_API_KEY`.
-
-Proxy port 8792 with your own TLS hostname. See [Caddyfile.example](Caddyfile.example). Then confirm from outside the machine:
-
-```bash
-curl -sS https://amazon.example.com/health
-```
-
 Sign in to Amazon in a normal browser. Amazon blocks automated login windows. Export cookies for each account (`chmod 600`):
 
 | Account | File |
@@ -46,15 +29,38 @@ Sign in to Amazon in a normal browser. Amazon blocks automated login windows. Ex
 
 A business session includes a `b2b` cookie. A personal add is refused when that cookie is present, and a business add is refused when it is missing.
 
-Tell Muse:
+```bash
+export AMAZON_API_KEY="$(cat ~/.amazon-cart/api-key)"
+export HOST=127.0.0.1
+export PORT=8792
+amazon-cart
+```
 
-- **provider**: `amazon-products`
-- **hostname**: your public hostname, with no `https://` and no path
-- **placement**: `bearer_header`
+`MUSE_API_KEY` is accepted as an alias of `AMAZON_API_KEY`.
 
-Muse should call `credentials.request_api_access` with `auth_scheme: api_key` and those values. Paste `AMAZON_API_KEY` into the hosted Secure Vault link. Do not put the key in chat. `placement` cannot be changed later.
+Confirm the server is up:
 
-After that, Muse calls `https://your-hostname` with `Authorization: Bearer`. Use `account=personal` or `account=business` on cart routes. One key is enough for both.
+```bash
+curl -sS http://127.0.0.1:8792/health
+```
+
+Expect `{"ok":true,"service":"amazon-cart"}`.
+
+## Use from Muse over SSH
+
+When Muse has a shell on the machine running `amazon-cart`, it calls the API on localhost. Leave the process bound to `127.0.0.1`. A public hostname and TLS are not part of this setup.
+
+Tell Muse the SSH host, the base URL `http://127.0.0.1:8792`, and to send `Authorization: Bearer` with `AMAZON_API_KEY`. Keep the key out of chat. A prompt you can paste is in [MUSE.md](MUSE.md).
+
+After SSH, Muse can run:
+
+```bash
+curl -sS -H "Authorization: Bearer $AMAZON_API_KEY" \
+  'http://127.0.0.1:8792/search?query=usb-c+cable&max_results=5'
+
+curl -sS -H "Authorization: Bearer $AMAZON_API_KEY" \
+  'http://127.0.0.1:8792/cart/add?asin=B000000000&quantity=1&account=personal'
+```
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -67,16 +73,21 @@ After that, Muse calls `https://your-hostname` with `Authorization: Bearer`. Use
 
 `POST /cart` accepts `{"asin","quantity","region","account"}`. A missing login returns HTTP 409. An Amazon block page returns HTTP 503.
 
+Use `account=personal` or `account=business` on cart routes. One key covers both carts.
+
+## Optional: public HTTPS provider
+
+Muse can also register this API with `credentials.request_api_access`. That connector stores `api_hosts` as a bare public hostname and calls it over HTTPS. Put TLS in front of port 8792 first. See [Caddyfile.example](Caddyfile.example) and the registration steps in [MUSE.md](MUSE.md).
+
+For that connector, the hostname has no `https://` and no path. `placement` is `bearer_header` and cannot be changed later.
+
 ## Use without Muse
 
-The same server is a normal HTTP API. Skip provider registration and call it yourself with the Bearer key:
+The same server is a normal HTTP API. Skip Muse and call it yourself with the Bearer key:
 
 ```bash
 curl -sS -H "Authorization: Bearer $AMAZON_API_KEY" \
   'http://127.0.0.1:8792/search?query=usb-c+cable&max_results=5'
-
-curl -sS -H "Authorization: Bearer $AMAZON_API_KEY" \
-  'http://127.0.0.1:8792/cart/add?asin=B000000000&quantity=1&account=personal'
 ```
 
-`X-Api-Key` is also accepted. Bind to `127.0.0.1` if you only want local use. Search accepts `max_results` (default 16) and `region` (default `us`): `us`, `uk`, `ca`, `de`, `fr`, `es`, `it`, `nl`, `jp`, `au`, `mx`, `in`, `ae`, `sa`, `ie`, `be`. `/regions` and `/products` are also available. `/products` is an alias for search.
+`X-Api-Key` is also accepted. Search accepts `max_results` (default 16) and `region` (default `us`): `us`, `uk`, `ca`, `de`, `fr`, `es`, `it`, `nl`, `jp`, `au`, `mx`, `in`, `ae`, `sa`, `ie`, `be`. `/regions` and `/products` are also available. `/products` is an alias for search.
