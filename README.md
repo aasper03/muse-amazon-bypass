@@ -1,89 +1,82 @@
 # amazon-cart
 
-HTTP API to search Amazon and add a product to a signed-in cart. One process can use two accounts, `personal` and `business`. Each account is a [Netscape cookie jar](https://curl.se/docs/http-cookies.html) you export from a normal browser. This package does not ship anyone's cookies, hostnames, or API keys.
+A small HTTPS API so [Muse](https://muse.ai) can search Amazon and add items to a cart. Muse has no field for a custom server URL. You run this service on a public hostname, then register it as a custom API provider with one Bearer key.
+
+One Muse connection covers two carts, `personal` and `business`. Each cart is a [Netscape cookie jar](https://curl.se/docs/http-cookies.html) exported from a normal browser. This package does not include anyone's cookies, hostname, or API key.
 
 Search does not require a login. Add to cart does. Adding an item does not check out or pay.
 
-## Install
+Full registration steps and a prompt you can paste to Muse are in [MUSE.md](MUSE.md).
 
-Requires Python 3.11+ and `curl` on `PATH`.
+## Set up for Muse
+
+You need Python 3.11+, `curl`, and a public HTTPS name. Muse will not call a Tailscale address, a raw IP, or plain `http://`.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install .
-cp .env.example .env
-# put a long random value in AMAZON_API_KEY
-```
-
-From Git:
-
-```bash
 pip install git+https://github.com/aasper03/amazon-cart.git
+mkdir -p ~/.amazon-cart
+chmod 700 ~/.amazon-cart
+openssl rand -hex 32 > ~/.amazon-cart/api-key
+chmod 600 ~/.amazon-cart/api-key
 ```
 
-## Run
-
 ```bash
-set -a
-source .env
-set +a
+export AMAZON_API_KEY="$(cat ~/.amazon-cart/api-key)"
+export HOST=127.0.0.1
+export PORT=8792
 amazon-cart
 ```
 
-The server listens on `127.0.0.1:8792` unless `HOST` and `PORT` are set. Put your own HTTPS reverse proxy in front of it if you want it on the public internet. Keep the API key secret.
+`MUSE_API_KEY` is accepted as an alias of `AMAZON_API_KEY`.
+
+Proxy port 8792 with your own TLS hostname. See [Caddyfile.example](Caddyfile.example). Then confirm from outside the machine:
 
 ```bash
-curl -sS http://127.0.0.1:8792/health
-curl -sS -H "Authorization: Bearer $AMAZON_API_KEY" \
-  'http://127.0.0.1:8792/search?query=usb-c+cable&max_results=5'
+curl -sS https://amazon.example.com/health
 ```
 
-## Cookie jars
+Sign in to Amazon in a normal browser. Amazon blocks automated login windows. Export cookies for each account (`chmod 600`):
 
-Cart calls read:
-
-| Account | Default file |
-|---------|----------------|
+| Account | File |
+|---------|------|
 | `personal` | `~/.amazon-cart/cookies-personal.txt` |
 | `business` | `~/.amazon-cart/cookies-business.txt` |
 
-Override the directory with `AMAZON_COOKIE_DIR`, or either file with `AMAZON_PERSONAL_COOKIES` and `AMAZON_BUSINESS_COOKIES`.
+A business session includes a `b2b` cookie. A personal add is refused when that cookie is present, and a business add is refused when it is missing.
 
-Sign in with a normal browser. Amazon blocks automated login windows. Export that browser's Amazon cookies to a Netscape cookie file and save it at the path above (`chmod 600`). A business account session usually includes a `b2b` cookie. A personal add is refused if that cookie is present, and a business add is refused if it is missing, so one account cannot write into the other cart.
+Tell Muse:
+
+- **provider**: `amazon-products`
+- **hostname**: your public hostname, with no `https://` and no path
+- **placement**: `bearer_header`
+
+Muse should call `credentials.request_api_access` with `auth_scheme: api_key` and those values. Paste `AMAZON_API_KEY` into the hosted Secure Vault link. Do not put the key in chat. `placement` cannot be changed later.
+
+After that, Muse calls `https://your-hostname` with `Authorization: Bearer`. Use `account=personal` or `account=business` on cart routes. One key is enough for both.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Liveness, no auth |
+| GET | `/search?query=…` | Search products |
+| GET | `/product/{asin}` | Product details |
+| GET | `/product/{asin}/variations` | Variants |
+| GET | `/cart?account=personal\|business` | Read that cart |
+| GET | `/cart/add?asin=…&quantity=1&account=…` | Add to that cart |
+
+`POST /cart` accepts `{"asin","quantity","region","account"}`. A missing login returns HTTP 409. An Amazon block page returns HTTP 503.
+
+## Use without Muse
+
+The same server is a normal HTTP API. Skip provider registration and call it yourself with the Bearer key:
 
 ```bash
 curl -sS -H "Authorization: Bearer $AMAZON_API_KEY" \
-  'http://127.0.0.1:8792/cart?account=personal'
+  'http://127.0.0.1:8792/search?query=usb-c+cable&max_results=5'
 
 curl -sS -H "Authorization: Bearer $AMAZON_API_KEY" \
-  'http://127.0.0.1:8792/cart/add?asin=B000000000&quantity=1&account=business'
+  'http://127.0.0.1:8792/cart/add?asin=B000000000&quantity=1&account=personal'
 ```
 
-`POST /cart` accepts JSON: `{"asin","quantity","region","account"}`.
-
-`account` is `personal` or `business`. The default is `personal`. A missing login returns HTTP 409.
-
-## Endpoints
-
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/health` | no |
-| GET | `/regions` | yes |
-| GET | `/search?query=…` | yes |
-| GET | `/products?query=…` | yes |
-| GET | `/product/{asin}` | yes |
-| GET | `/product/{asin}/variations` | yes |
-| GET | `/cart?account=personal\|business` | yes |
-| GET | `/cart/add?asin=…&quantity=1&account=…` | yes |
-| POST | `/cart` | yes |
-
-Search also accepts `max_results` (default 16) and `region` (default `us`). Region codes: `us`, `uk`, `ca`, `de`, `fr`, `es`, `it`, `nl`, `jp`, `au`, `mx`, `in`, `ae`, `sa`, `ie`, `be`.
-
-Send the key as `Authorization: Bearer <AMAZON_API_KEY>` or `X-Api-Key`.
-
-If Amazon serves a block page, the API returns HTTP 503.
-
-## Muse
-
-Muse has no settings field for a custom server URL. Register this API as a custom provider with one Bearer key on a public HTTPS hostname. The steps, the exact `request_api_access` arguments, and what to tell Muse are in [MUSE.md](MUSE.md).
+`X-Api-Key` is also accepted. Bind to `127.0.0.1` if you only want local use. Search accepts `max_results` (default 16) and `region` (default `us`): `us`, `uk`, `ca`, `de`, `fr`, `es`, `it`, `nl`, `jp`, `au`, `mx`, `in`, `ae`, `sa`, `ie`, `be`. `/regions` and `/products` are also available. `/products` is an alias for search.
