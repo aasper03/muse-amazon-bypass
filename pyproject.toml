@@ -1,0 +1,21 @@
+[project]
+name = "amazon-cart"
+version = "0.1.0"
+description = "Search Amazon products and add them to a personal or business cart."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.0.0",
+]
+
+[project.scripts]
+amazon-cart = "amazon_cart.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["amazon_cart*"]
