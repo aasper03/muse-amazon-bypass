@@ -3,6 +3,9 @@ name = "amazon-cart"
 version = "0.1.0"
 description = "Amazon product search and add-to-cart API for Muse."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Andrew Asper" }]
 requires-python = ">=3.11"
 dependencies = [
   "curl_cffi>=0.13.0",
@@ -14,8 +17,13 @@ dependencies = [
 [project.scripts]
 amazon-cart = "amazon_cart.__main__:main"
 
+[project.urls]
+Homepage = "https://github.com/aasper03/muse-amazon-bypass"
+Repository = "https://github.com/aasper03/muse-amazon-bypass"
+Changelog = "https://github.com/aasper03/muse-amazon-bypass/releases"
+
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
