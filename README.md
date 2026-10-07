@@ -10,7 +10,7 @@ Search does not require a login. Add to cart does. Adding an item does not check
 
 ## Set up
 
-You need Python 3.11+ and `curl`.
+You need Python 3.11+.
 
 ```bash
 python -m venv .venv

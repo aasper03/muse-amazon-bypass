@@ -4,7 +4,7 @@ Run the API on a machine Muse can SSH into, bound to localhost. Muse calls `http
 
 ## 1. Run the API on localhost
 
-You need Python 3.11+ and `curl`.
+You need Python 3.11+.
 
 ```bash
 python -m venv .venv

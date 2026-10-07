@@ -5,6 +5,7 @@ description = "Amazon product search and add-to-cart API for Muse."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "curl_cffi>=0.13.0",
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
   "pydantic>=2.0.0",

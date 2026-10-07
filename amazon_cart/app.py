@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Amazon product search and cart API.
 
-Search and product pages are fetched with curl. Cart actions use a Netscape
-cookie jar exported from a normal browser session for each Amazon account.
+Search and product pages are fetched with a Chrome TLS fingerprint. Cart
+actions use a Netscape cookie jar exported from a normal browser session
+for each Amazon account.
 """
 
 from __future__ import annotations
@@ -14,7 +15,11 @@ import os
 import re
 import secrets
 from html import unescape
+from http.cookiejar import LoadError, MozillaCookieJar
 from typing import Any
+
+from curl_cffi.requests import AsyncSession, Cookies
+from curl_cffi.requests.exceptions import RequestException
 from urllib.parse import quote_plus, unquote, urlencode, urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -194,59 +199,76 @@ def _interstitial_payload(html: str) -> dict[str, Any] | None:
     }
 
 
+def _header_map(headers: list[str] | None) -> dict[str, str]:
+    mapped: dict[str, str] = {}
+    for header in headers or []:
+        name, sep, value = header.partition(":")
+        if sep:
+            mapped[name.strip()] = value.strip()
+    return mapped
+
+
+def _load_cookie_jar(path: str) -> tuple[MozillaCookieJar, bool]:
+    jar = MozillaCookieJar(path)
+    if os.path.getsize(path) == 0:
+        return jar, True
+    try:
+        jar.load(ignore_discard=True, ignore_expires=True)
+    except (LoadError, OSError):
+        return jar, False
+    return jar, True
+
+
+def _save_cookie_jar(jar: MozillaCookieJar) -> None:
+    jar.save(ignore_discard=True, ignore_expires=True)
+    try:
+        os.chmod(jar.filename or "", 0o600)
+    except OSError:
+        pass
+
+
 async def _curl(
     url: str,
     body: str | None = None,
     content_type: str = "application/json",
     headers: list[str] | None = None,
 ) -> tuple[int, str]:
-    jar = _active_jar()
-    os.makedirs(os.path.dirname(jar) or ".", exist_ok=True)
-    if not os.path.exists(jar):
-        open(jar, "a").close()
-        os.chmod(jar, 0o600)
-    cmd = [
-        "curl",
-        "-sS",
-        "-L",
-        "--compressed",
-        "--max-time",
-        "25",
-        "-A",
-        HEADERS["User-Agent"],
-        "-b",
-        jar,
-        "-c",
-        jar,
-        "-w",
-        "\n__HTTP__%{http_code}",
-    ]
-    for header in headers or []:
-        cmd += ["-H", header]
-    if body is not None:
-        cmd += ["-X", "POST", "-H", f"Content-Type: {content_type}", "--data", body]
-    cmd.append(url)
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        err = stderr.decode("utf-8", "replace").strip()
-        raise HTTPException(
-            status_code=503,
-            detail=f"Amazon fetch failed: {err or proc.returncode}",
-        )
-    raw = stdout.decode("utf-8", "replace")
-    if "\n__HTTP__" not in raw:
-        raise HTTPException(status_code=503, detail="Amazon fetch returned no status")
-    html, status_s = raw.rsplit("\n__HTTP__", 1)
-    return int(status_s.strip() or "0"), html
+    """Chrome TLS fingerprint. Stock curl is served Amazon's HTTP 503 Sorry page."""
+    jar_path = _active_jar()
+    os.makedirs(os.path.dirname(jar_path) or ".", exist_ok=True)
+    if not os.path.exists(jar_path):
+        open(jar_path, "a").close()
+        try:
+            os.chmod(jar_path, 0o600)
+        except OSError:
+            pass
+    cookie_jar, can_save = _load_cookie_jar(jar_path)
+    header_map = _header_map(headers)
+    try:
+        async with AsyncSession(
+            impersonate="chrome",
+            cookies=Cookies(cookie_jar),
+            timeout=25,
+        ) as session:
+            if body is None:
+                response = await session.get(url, headers=header_map, allow_redirects=True)
+            else:
+                header_map.setdefault("Content-Type", content_type)
+                response = await session.post(
+                    url,
+                    data=body,
+                    headers=header_map,
+                    allow_redirects=True,
+                )
+    except RequestException as exc:
+        raise HTTPException(status_code=503, detail=f"Amazon fetch failed: {exc}") from exc
+    if can_save:
+        _save_cookie_jar(cookie_jar)
+    return response.status_code, response.text
 
 
 async def _fetch_html_unlocked(url: str) -> str:
-    """curl, not Python HTTP: Amazon 503s httpx/Playwright TLS fingerprints from this VPS."""
+    """Chrome-impersonated HTTP. Amazon 503s curl, httpx, and headless Chromium TLS."""
     status, html = await _curl(url)
     challenge = _interstitial_payload(html)
     if challenge:
