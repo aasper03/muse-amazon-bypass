@@ -70,10 +70,50 @@ curl -sS -H "Authorization: Bearer $AMAZON_API_KEY" \
 | GET | `/search?query=…` | Search products |
 | GET | `/product/{asin}` | Product details |
 | GET | `/product/{asin}/variations` | Variants |
+| GET | `/product/{asin}/reviews` | Product reviews (sort: helpful/recent) |
 | GET | `/cart?account=personal\|business` | Read that cart |
 | GET | `/cart/add?asin=…&quantity=1&account=…` | Add to that cart |
+| GET | `/cart/remove?asin=…&account=…` | Remove item from cart |
+| GET | `/cart/quantity?asin=…&quantity=…&account=…` | Update item quantity (0 removes) |
+| GET | `/cart/save-for-later?asin=…&account=…` | Move item to Save for Later |
+| GET | `/cart/move-to-cart?asin=…&account=…` | Move item from Saved back to cart |
+| GET | `/cart/saved?account=…` | List Save for Later items |
+| GET | `/registry/add?asin=…&reg_id=…&reg_item_id=…` | Add from baby registry |
+| GET | `/list/add?asin=…&list_type=…&list_id=…&list_item_id=…` | Add from any list (baby_registry, wedding_registry, wishlist, gift_list) |
+| GET | `/wishlist/add?asin=…&account=…` | Add item to wishlist |
+| GET | `/orders?account=…` | Order history (recent order IDs) |
 
 `POST /cart` accepts `{"asin","quantity","region","account"}`. A missing login returns HTTP 409. An Amazon block page returns HTTP 503.
+
+All POST endpoints also accept GET with query parameters for easy testing.
+
+## Cookie Detection (All Regions)
+
+Cookie detection works for ALL Amazon regions (US, CA, UK, DE, FR, etc.) via regex matching any `at-*`, `sess-at-*`, or `x-*` cookie. Previously only US cookies (`at-main`, `sess-at-main`, `x-main`) were detected; Canadian cookies (`at-acbca`, etc.) were missed.
+
+## Registry & List Operations
+
+Add items from registries, wishlists, and gift lists. The item is marked as from the list in the cart (e.g., "Stephen Nash's Baby Registry"). Shipping address is selected at checkout — Amazon shows the list owner's address as an option for list items.
+
+Fetch the product page with `?colid={listId}&coliid={listItemId}` to include `listPurchaseAttribution` fields that associate the item with the list.
+
+Supported list types:
+- `baby_registry` — Baby registries
+- `wedding_registry` — Wedding registries  
+- `wishlist` — Wishlists
+- `gift_list` — Gift lists
+
+## Cart Operations
+
+Full cart management:
+- **Add** — Regular add-to-cart or from list/registry
+- **Remove** — Delete item by ASIN (uses delete button + CSRF token)
+- **Update quantity** — Change quantity, 0 removes the item
+- **Save for later** — Move item to Save for Later
+- **Move to cart** — Move item from Saved back to cart
+- **Get saved** — List items in Save for Later
+
+All operations use `curl_cffi` with Chrome TLS impersonation. No browser needed.
 
 Use `account=personal` or `account=business` on cart routes. One key covers both carts.
 
