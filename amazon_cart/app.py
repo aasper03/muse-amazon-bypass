@@ -18,7 +18,7 @@ from html import unescape
 from http.cookiejar import LoadError, MozillaCookieJar
 from typing import Any
 
-from curl_cffi.requests import AsyncSession, Cookies
+from curl_cffi.requests import AsyncSession
 from curl_cffi.requests.exceptions import RequestException
 from urllib.parse import quote_plus, unquote, urlencode, urlsplit
 
@@ -247,7 +247,7 @@ async def _curl(
     try:
         async with AsyncSession(
             impersonate="chrome",
-            cookies=Cookies(cookie_jar),
+            cookies=cookie_jar,  # the jar itself: Cookies(jar) would be copied and lose new cookies
             timeout=25,
         ) as session:
             if body is None:
